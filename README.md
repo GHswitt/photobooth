@@ -20,10 +20,11 @@ My system setup looks like this:
 * Opens HTTP port on 8080 to watch current screen and logfile from remote devices (smartphone)
 
 New features (some parts finished, but not yet committed):
-* Resize image for web usage
-* Upload image to static webserver gallery
-* Show URL and QRCode of image in the webserver gallery
-* Local HTTP supports showing the current image for remote screen (e.g. tablet on wall in another room)
-* WhatsApp image serving support: You send an image number to a WhatsApp number running yowsup and the the image to your phone
-* Admin Telegram support (telepot): Control photobooth, get log, status, receive error messages, ...
-* Underexposure warning support (for example if the flash does not work): Send warning to Admin via Telegram
+* Resize image for web usage (Finished)
+* Upload image to static webserver gallery (Finished)
+* Show URL and QRCode of image in the webserver gallery (Finished)
+* Local HTTP supports showing the current image for remote screen (e.g. tablet on wall in another room) (Finished)
+* WhatsApp image serving support: You send an image number to a number running yowsup and get the image to your phone (Finished)
+* Admin Telegram support (telepot): Control photobooth, get log, status, receive error messages, ... (WIP)
+* Underexposure warning support (for example if the flash does not work): Send warning to Admin via Telegram (WIP)
+* Green screen support (WIP)
