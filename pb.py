@@ -10,14 +10,24 @@ import pygame
 import cups
 import pygbutton
 import card
+#from urllib.parse import urlparse
+#import argparse
+#import socket
 import sys
 import os
 import glob
+import re
+#from os.path import expanduser
+#import time
 import gallery
 import printer
 import logging
 import pbweb
+import pbupload
+import pbqrcode
 #import pktrigger
+import StringIO
+import PIL.Image
 
 # Define some colors
 BLACK = (0, 0, 0)
@@ -68,18 +78,25 @@ class photobooth(object):
 
   # PKTriggercord
   #pk = pktrigger.pktrigger ()
-
-  # Last file
-  current_file = None
   
   # Printer
   printer = None    
+  phistory = None
 
   # Gallery
   gallery = None
 
   # Constructor
-  def __init__(self, FlashAirAddress, PrinterName):
+  def __init__(self,
+	       FlashAirAddress,
+	       Name = None,
+	       PrinterName = None, 
+	       UploadHost = None,
+	       UploadUser = None,
+	       UploadPath = None,
+	       UploadSize = [1600, 1600],
+	       QRPath = None,
+	       WhatsAppNumber = None):
     logging.basicConfig (filename='pb.log', level=logging.DEBUG, format='%(asctime)s %(levelname)-7s %(module)-8s/%(funcName)-8s: %(message)s')
     #root = logging.getLogger ()
     #root.setLevel (logging.DEBUG)
@@ -106,23 +123,46 @@ class photobooth(object):
     self.button_print = pygbutton.PygButton (self.button_print_rect, 'Drucken', bgcolor=RED)
     self.button_gallery = pygbutton.PygButton (self.button_gallery_rect, 'Galerie', bgcolor=GREEN)
     
-    # Setup FlashAir card
-    self.fa = card.connection (FlashAirAddress, 80, 3000)
-    logging.info ('FlashAir address: ' + FlashAirAddress)
+    # Project name
+    self.name = Name
 
+    # Setup FlashAir card
+    self.fa = card.connection (FlashAirAddress, 80, 10)
+    self.fa_address = FlashAirAddress
+    logging.info ('FlashAir address: ' + FlashAirAddress)
+    self.connected = False
+
+    # Last file
+    self.current_file = None
+  
     # Image folder
-    self.image_folder = 'images/'
+    self.image_folder = os.path.join ('images', self.name)
+    if not os.path.exists (self.image_folder):
+      os.makedirs (self.image_folder)
     if os.access (self.image_folder, os.W_OK):
       logging.info ('Image folder: ' + self.image_folder)
     else:
       logging.error ('No access to image folder: ' + self.image_folder)
 
     # Printer
-    logging.info ('Printer: ' + PrinterName)
-    self.printer = printer.printer (PrinterName)
+    if PrinterName:
+      logging.info ('Printer: ' + PrinterName)
+      self.printer = printer.printer (PrinterName)
 
-    # Print history
-    self.phistory = printer.print_history ('print_history.txt')
+      # Print history
+      self.phistory = printer.print_history (os.path.join (self.image_folder, 'print_history.txt'))
+
+    # Upload
+    if UploadHost:
+      self.upload = pbupload.pfweb (self.name, UploadHost, UploadUser, UploadPath, UploadSize)
+    else:
+      self.upload = None
+    
+    # QRCode path
+    self.QRPath = QRPath
+
+    # WhatsApp support
+    self.WhatsAppNumber = WhatsAppNumber
 
     # Gallery
     self.gallery = gallery.gallery (self.screen_size, 4, 3)
@@ -132,11 +172,20 @@ class photobooth(object):
 
     # Status & Counters
     self.status_message = ''
-    self.count_images = len (glob.glob (self.image_folder + '*.JPG'))
-    self.count_prints = self.phistory.Count ()
-
+    self.count_images = len (self.GetFileList ())
     logging.info ('Init image count: ' + str (self.count_images))
-    logging.info ('Init print count: ' + str (self.count_prints))
+    
+    if self.phistory:
+      # Add number of prints
+      self.count_prints = self.phistory.Count ()
+      logging.info ('Init print count: ' + str (self.count_prints))
+
+    # Current image
+    self.current_image = None
+
+  # Get image file list
+  def GetFileList (self):
+    return glob.glob (os.path.join (self.image_folder, '*.JPG'))
 
   # Find newest directory
   def UpdateRemoteDirectory (self):
@@ -149,14 +198,14 @@ class photobooth(object):
     latest_date = 0
     for d in outlist:
       if not d.attribute_Directly:
-	continue
+        continue
       if d.date > latest_date:
-	latest_date = d.date
-	latest_time = d.time
-	latest_dir = d
+        latest_date = d.date
+        latest_time = d.time
+        latest_dir = d
       elif d.date == latest_date and d.time > latest_time:
-	latest_time = d.time
-	latest_dir = d
+        latest_time = d.time
+        latest_dir = d
 	
     if not latest_dir:
       logging.warning ('FlashAir: Did not find latest directory')
@@ -164,18 +213,40 @@ class photobooth(object):
     
     self.fa_path = latest_dir.directory_name + '/' + latest_dir.file_name
     logging.info ('FlashAir: Latest directory: ' + self.fa_path)
-	  
+    
+  # Ping card
+  def PingFA (self):
+    res = os.system ("ping -c 1 -w2 " + self.fa_address + " >/dev/null 2>&1");
+    if res == 0:
+      return True
+    return False
+
   # Check for new write event on card
   def CheckWriteEvent (self):
+    # Ping
+    #if not self.PingFA ():
+    #  self.fa_LastWriteEvent = 0
+    #  logging.warning ('FlashAir: Ping failed')
+    #  self.status_message = 'Keine Kamera'
+    #  return False
+
     # Get timestamp of last write event
     Status, Event = self.fa.send_command (card.command.Get_time_stamp_of_write_event)
     
     if Status:
-      logging.warning ('FlashAir: Get write timestamp failed')
+      # Reset write event
+      self.fa_LastWriteEvent = 0
+      #logging.warning ('FlashAir: Get write timestamp failed')
       self.status_message = 'Keine Verbindung'
       #self.WriteMessage ("Keine Verbindung")
       #self.state = state.pb_error
+      self.connected = False
       return False
+
+    if not self.connected:
+      logging.info ('FlashAir: Connected')
+      self.status_message = 'Verbunden'
+      self.connected = True
 
     Event = int (Event)
 
@@ -205,8 +276,9 @@ class photobooth(object):
     text = font.render ('Fotos: ' + str (self.count_images), True, WHITE)
     size = text.get_size ()
     self.screen.blit (text, [self.image_size[0] + 5, 5 + 3*size[1]])
-    text = font.render ('Gedruckt: ' + str (self.count_prints), True, WHITE)
-    self.screen.blit (text, [self.image_size[0] + 5, 5 + 4*size[1]])
+    if self.printer:
+      text = font.render ('Gedruckt: ' + str (self.count_prints), True, WHITE)
+      self.screen.blit (text, [self.image_size[0] + 5, 5 + 4*size[1]])
     if Message:
       self.status_message = Message
     if self.status_message:
@@ -214,7 +286,75 @@ class photobooth(object):
       self.screen.blit (text, [self.image_size[0] + 5, 5 + 0*size[1]])
     if Message:
       pygame.display.flip()
+  
+  # Draw QRCode
+  def DrawQRCode (self, File):
+    if not self.QRPath:
+      return
+    if not File:
+      return
+
+    # Build QR code
+    address = self.QRPath + '/' + os.path.basename (File).lower ()
+    qr = pbqrcode.qrcode (address)
+    # Get QR code as RGB string
+    qrsize, rgb = qr.GetRGBString ()
+    # Create PyGame image from RGB string
+    qrimg = pygame.image.fromstring (rgb, qrsize, 'RGB')
+    qrimg = pygame.transform.scale (qrimg, (200,200))
+    qrsize = qrimg.get_size ()
+    qrpos = [self.image_size[0] - qrsize[0] - 1, self.image_size[1] - qrsize[1] - 1]
+    self.screen.blit (qrimg, qrpos)
+    # Draw web address as text
+    font = pygame.font.Font(None, 30)
+    text = font.render (address, True, WHITE)
+    size = text.get_size ()
+    self.screen.blit (text, [qrpos[0] - size[0] - 1, self.image_size[1] - size[1] - 1])
     
+  # Draw WhatsApp number
+  def DrawWhatsApp (self, File):
+    if not self.WhatsAppNumber:
+      return
+    if not File:
+      return
+    
+    # Get image number
+    ImageNr = re.findall ('\d+', os.path.basename (File))
+    if not ImageNr:
+      return
+    
+    # Draw text
+    font = pygame.font.Font(None, 30)
+    text = font.render ('Sende ' + str(ImageNr[0]) + ' an WhatsApp ' + self.WhatsAppNumber, True, WHITE)
+    size = text.get_size ()
+    self.screen.blit (text, [0, self.image_size[1] - size[1] - 1])
+    
+  # Capture
+  def Capture (self):
+    self.WriteStatus ("Bitte warten...")
+    #pygame.draw.rect (self.screen, BLACK, [0, 0, self.image_size[0], self.image_size[1]])
+    #self.WriteMessage ("Bitte warten...", False)
+    logging.info ('FlashAir: Sync')
+
+    newfile = self.fa.sync_new_pictures_since_start (self.fa_path, self.image_folder)
+    #newfile = self.pk.sync_new_file ()
+
+    #if (not os.access (lastfile, os.R_OK)):
+    if not newfile:
+      logging.info ('FlashAir: No new file')
+      self.state = state.pb_display
+    else:
+      logging.info ('FlashAir: New file ' + newfile)
+      self.current_file = newfile
+      self.count_images = len (self.GetFileList ())
+      # Create thumbnail
+      self.gallery.CreateThumbnail (self.current_file)
+      self.state = state.pb_display
+      
+      # Upload
+      if self.upload:
+        self.upload.put (self.current_file)
+            
   # Display
   def Display (self, File=''):
     if not File:
@@ -241,14 +381,65 @@ class photobooth(object):
     pygame.draw.rect (self.screen, BLACK, [0, 0, self.image_size[0], self.image_size[1]])
     self.screen.blit (image, [0, 0])
 
+    # Save current image
+    self.current_image = image
+
+    # Draw QRCode
+    self.DrawQRCode (File)
+    
+    # Draw WhatsApp
+    self.DrawWhatsApp (File)
+      
     # Update status message
     self.status_message = os.path.basename (File)
 
+    # Check exposure
+    ts = image.copy ()
+    t = pygame.transform.threshold (ts, image, ( 0,0,0 ), [20]*3, ( 255,255,255 ), 0)
+    logging.info ('threshold: ' + str (t))
+
+  # Get current image as JPEG
+  def GetImageJPEG(self):
+    if not self.current_image:
+      return None
+    # Get current image as RGB
+    RGB = pygame.image.tostring (self.current_image, 'RGB')
+    # Load to Pillow
+    Img = PIL.Image.frombytes ('RGB', self.current_image.get_size (), RGB)
+    output = StringIO.StringIO()
+    # Save as JPEG
+    Img.save(output, format="JPEG")
+    data = output.getvalue()
+    output.close()
+    return data
+    
+  # Gallery
+  def Gallery (self):
+    # Get list of files
+    files = self.GetFileList ()
+    files.sort (reverse = True)
+    TextList = []
+    for file in files:
+      if self.printer and self.phistory.Check (file):
+        TextList.append (os.path.basename (file) + " (Gedruckt)")
+      else:
+        TextList.append (os.path.basename (file))
+        
+    # Show gallery
+    selection = self.gallery.Run (self.screen, files, TextList)
+    self.screen.fill (BLACK)
+    # If image was selected, show it again
+    if (selection >= 0):
+      self.current_file = files[selection]
+      self.state = state.pb_display
+    else:
+      self.state = state.pb_display
+    
   # -------- Main Program Loop -----------
   def MainLoop (self):
     self.state = state.pb_waiting
 
-    web = pbweb.pbWeb ()
+    web = pbweb.pbWeb (self.GetImageJPEG)
     web.start ()
 
     # Get latest directory
@@ -260,125 +451,100 @@ class photobooth(object):
       
       # --- Main event loop
       for event in pygame.event.get():
-	if 'click' in self.button_print.handleEvent(event) and self.button_print.bgcolor == GREEN:
-	  self.state = state.pb_print
-	  logging.info ("Button print")
-	if 'click' in self.button_gallery.handleEvent(event):# and self.button_gallery.bgcolor == GREEN:
-	  self.state = state.pb_gallery
-	  logging.info ("Button gallery")
-	if event.type == pygame.QUIT:
-	  self.done = True
-	  logging.info ("QUIT")
-	elif event.type == pygame.KEYDOWN and event.key == pygame.K_q:
-	  self.done = True
-	  logging.info ("Keyboard quit")
+        if self.printer and 'click' in self.button_print.handleEvent(event) and self.button_print.bgcolor == GREEN:
+          self.state = state.pb_print
+          logging.info ("Button print")
+        if 'click' in self.button_gallery.handleEvent(event):# and self.button_gallery.bgcolor == GREEN:
+          self.state = state.pb_gallery
+          logging.info ("Button gallery")
+        if event.type == pygame.QUIT:
+          self.done = True
+          logging.info ("QUIT")
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_q:
+          self.done = True
+          logging.info ("Keyboard quit")
 
       # --- Game logic should go here
       if self.state == state.pb_error:
-	self.screen.fill (BLACK)
+        self.screen.fill (BLACK)
+
+      # Display last file
+      if not self.current_file:
+        files = self.GetFileList ()
+        if files:
+          files.sort (reverse = True)
+          self.current_file = files[0]
+          self.state = state.pb_display
 
       # Get timestamp of last write event
       if ((self.state == state.pb_waiting) or (self.state == state.pb_error)) and self.CheckWriteEvent ():
-	self.state = state.pb_capture
-      #self.state = state.pb_capture
+        self.state = state.pb_capture
 
+      # Capture
       if (self.state == state.pb_capture):
-	self.WriteStatus ("Bitte warten...")
-	#pygame.draw.rect (self.screen, BLACK, [0, 0, self.image_size[0], self.image_size[1]])
-	#self.WriteMessage ("Bitte warten...", False)
-	logging.info ('FlashAir: Sync')
-	
-	newfile = self.fa.sync_new_pictures_since_start (self.fa_path, self.image_folder)
-	#newfile = self.pk.sync_new_file ()
+        self.Capture ()
 
-	#if (not os.access (lastfile, os.R_OK)):
-	if not newfile:
-	  logging.info ('FlashAir: No new file')
-	  self.state = state.pb_display
-	else:
-	  logging.info ('FlashAir: New file ' + newfile)
-	  self.current_file = newfile
-	  self.count_images = len (glob.glob (self.image_folder + '*.JPG'))
-	  # Create thumbnail
-	  self.gallery.CreateThumbnail (self.current_file)
-	  self.state = state.pb_display
-
+      # Display
       if self.state == state.pb_display:
-	if self.current_file:
-	  self.Display ()
-	  self.status_message = os.path.basename (self.current_file)
-	self.state = state.pb_waiting
+        if self.current_file:
+          self.Display ()
+          self.status_message = os.path.basename (self.current_file)
+        self.state = state.pb_waiting
       elif self.state == state.pb_print:
-	# Start printing
-	if not self.printer.isPresent:
-	  self.state = state.pb_error
-	elif not self.printer.getState () == cups.IPP_PRINTER_IDLE:
-	  logging.warning ("Printer not idle")
-	  self.state = state.pb_error
-	else:
-	  self.WriteMessage ("Drucken...")
-	  self.printer.printFile (self.current_file)
-	  self.state = state.pb_printing
+        # Start printing
+        if not self.printer.isPresent:
+          self.state = state.pb_error
+        elif not self.printer.getState () == cups.IPP_PRINTER_IDLE:
+          logging.warning ("Printer not idle")
+          self.state = state.pb_error
+        else:
+          self.WriteMessage ("Drucken...")
+          self.printer.printFile (self.current_file)
+          self.state = state.pb_printing
       elif self.state == state.pb_printing:
-	printer_state = self.printer.getState ()
-	if printer_state == cups.IPP_PRINTER_IDLE and self.printer.jobsFinished ():
-	  self.Display ()
-	  self.WriteMessage ("Fertig")
-	  self.WriteMessage ("Bitte neues Foto machen", False, 1)
-	  self.phistory.Add (self.current_file)
-	  self.phistory.Save ()
-	  self.count_prints += 1
-	  self.state = state.pb_waiting
+        printer_state = self.printer.getState ()
+        if printer_state == cups.IPP_PRINTER_IDLE and self.printer.jobsFinished ():
+          self.Display ()
+          self.WriteMessage ("Fertig")
+          self.WriteMessage ("Bitte neues Foto machen", False, 1)
+          self.phistory.Add (self.current_file)
+          self.phistory.Save ()
+          self.count_prints += 1
+          self.state = state.pb_waiting
       elif self.state == state.pb_gallery:
-	# Gallery, get list of files
-	files = glob.glob (self.image_folder + '*.JPG')
-	files.sort (reverse = True)
-	TextList = []
-	for file in files:
-	  if self.phistory.Check (file):
-	    TextList.append (os.path.basename (file) + " (Gedruckt)")
-	  else:
-	    TextList.append (os.path.basename (file))
-	    
-	# Show gallery
-	selection = self.gallery.Run (self.screen, files, TextList)
-	self.screen.fill (BLACK)
-	# If image was selected, show it again
-	if (selection >= 0):
-	  self.current_file = files[selection]
-	  self.state = state.pb_display
-	else:
-	  self.state = state.pb_display
-	
+        # Gallery
+        self.Gallery ()
+
       # Handle print button
       if self.state == state.pb_error:
-	self.WriteMessage ("Fehler :-(", True)
-	self.button_print.bgcolor = RED
-      elif self.state == state.pb_waiting and \
-           self.current_file and \
-           not self.phistory.Check (self.current_file) and \
-           self.printer.getState () == cups.IPP_PRINTER_IDLE:
-	self.button_print.bgcolor = GREEN
+        self.WriteMessage ("Fehler :-(", True)
+        self.button_print.bgcolor = RED
+      elif self.printer and self.state == state.pb_waiting and \
+                  self.current_file and \
+                  not self.phistory.Check (self.current_file) and \
+                  self.printer.getState () == cups.IPP_PRINTER_IDLE:
+        self.button_print.bgcolor = GREEN
       else:
-	self.button_print.bgcolor = YELLOW
-    
+        self.button_print.bgcolor = YELLOW
+          
       # Handle gallery button
       if self.state == state.pb_error:
-	self.button_gallery.bgcolor = RED
+        self.button_gallery.bgcolor = RED
       elif self.state == state.pb_waiting:
-	self.button_gallery.bgcolor = GREEN
+        self.button_gallery.bgcolor = GREEN
       else:
-	self.button_gallery.bgcolor = YELLOW
-	
+        self.button_gallery.bgcolor = YELLOW
+
       # Change print button caption if already printed
-      if self.current_file and self.phistory.Check (self.current_file):
-	self.button_print.caption = "Bereits gedruckt"
+      if self.current_file and self.phistory and self.phistory.Check (self.current_file):
+        self.button_print.caption = "Bereits gedruckt"
       else:
-	self.button_print.caption = "Drucken"
+        self.button_print.caption = "Drucken"
 
       # --- Drawing code should go here
       self.WriteStatus ()
-      self.button_print.draw (self.screen)
+      if self.printer:
+        self.button_print.draw (self.screen)
       self.button_gallery.draw (self.screen)
 
       # --- Go ahead and update the screen with what we've drawn.
@@ -386,10 +552,25 @@ class photobooth(object):
   
       # Capture screen
       pygame.image.save (self.screen, 'screen.jpg')
+    
+    # Stop uploader
+    if self.upload:
+      self.upload.stop ()
+
+    web.stop ()
+    web.join ()
+    
     # Close the window and quit.
     # If you forget this line, the program will 'hang'
     # on exit if running from IDLE.
     pygame.quit()
 
-    web.stop ()
-    web.join ()
+    
+
+    import sys, traceback, threading
+    for thread_id, frame in sys._current_frames().iteritems():
+      name = thread_id
+      for thread in threading.enumerate():
+        if thread.ident == thread_id:
+           name = thread.name
+      traceback.print_stack(frame)

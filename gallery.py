@@ -10,6 +10,7 @@ import pygame
 import pygbutton
 import os
 import logging
+import subprocess
 
 # Define some colors
 BLACK = (0, 0, 0)
@@ -34,8 +35,6 @@ class arrow(object):
       self.points = self.up_points
     elif (type == 1):
       self.points = self.down_points
-
-    #points = copy.deepcopy (self.up_points)
     
     # Scale points to new size
     xscale = float(1000) / self.size[0]
@@ -52,9 +51,9 @@ class arrow(object):
     self.mouse_area[0] = position
     for i in self.points:
       if i[0] > self.mouse_area[1][0]:
-	self.mouse_area[1][0] = i[0]
+        self.mouse_area[1][0] = i[0]
       if i[1] > self.mouse_area[1][1]:
-	self.mouse_area[1][1] = i[1]
+        self.mouse_area[1][1] = i[1]
     
   # Add position
   def AddOffset (self, points, offset):
@@ -90,21 +89,66 @@ def Scale (source, target):
       # Target is wider than source
       new_height = int (target[0] / image_aspect)
       if (new_height > target[1]):
-	# Higher than target, reduce both
-	new_width = int (new_width / (float (new_height) / target[1]))
-	new_height = target[1]
+        # Higher than target, reduce both
+        new_width = int (new_width / (float (new_height) / target[1]))
+        new_height = target[1]
     else:
       # Target is higher or same
       new_width = int (target[1] * image_aspect)
       if (new_width > target[0]):
-	# Wider than target, reduce both
-	new_height = int (new_height / (float (new_width) / target[0]))
-	new_width = target[0]
+        # Wider than target, reduce both
+        new_height = int (new_height / (float (new_width) / target[0]))
+        new_width = target[0]
 
     return [new_width, new_height]
   else:
     return []
+
+
+# Resize
+def Resize (In, Out, Size = [1600, 1600]):
+  if not os.access (In, os.R_OK):
+    logging.warning ('No access to ' + In)
+    return
+  OutPath = os.path.dirname (Out)
+  if not os.path.exists (OutPath):
+    os.makedirs (OutPath)
+  if not os.access (OutPath, os.W_OK):
+    logging.warning ('No access to ' + OutPath)
+    return
     
+  # Load and convert
+  img = pygame.image.load (In).convert ()
+  
+  # Scale if required, preserving aspect ratio
+  scale = Scale (img.get_size (), Size)
+  if (scale):
+    img = pygame.transform.smoothscale (img, scale)
+
+  logging.info ('Resized to ' + Out)
+  pygame.image.save (img, Out)
+
+# Resize with EXIF
+def ResizeEXIF (In, Out, Size = [1600, 1600]):
+  if not os.access (In, os.R_OK):
+    logging.warning ('No access to ' + In)
+    return
+  OutPath = os.path.dirname (Out)
+  if not os.path.exists (OutPath):
+    os.makedirs (OutPath)
+  if not os.access (OutPath, os.W_OK):
+    logging.warning ('No access to ' + OutPath)
+    return
+    
+  # Load and convert
+  ret = subprocess.call (['/usr/bin/convert', '-resize', str(Size[0]) + 'x' + str(Size[1]), In, Out])
+
+  if ret:
+    logging.error ('Resize failed to ' + Out)
+    return
+  
+  logging.info ('Resized to ' + Out)
+
 class gallery(object):
 
   # Constructor
@@ -130,27 +174,9 @@ class gallery(object):
 
   # Create thumbnail
   def CreateThumbnail (self, Filename):
-    if not os.access (Filename, os.R_OK):
-      logging.warning ('No access to ' + Filename)
-      return
-    if not os.path.exists (self.thumbnail_folder):
-      os.makedirs (self.thumbnail_folder)
-    if not os.access (self.thumbnail_folder, os.W_OK):
-      logging.warning ('No access to ' + self.thumbnail_folder)
-      return
-      
-    # Load and convert
-    img = pygame.image.load (Filename).convert ()
-    
-    # Scale if required, preserving aspect ratio
-    scale = Scale (img.get_size (), [640, 480])
-    if (scale):
-      img = pygame.transform.smoothscale (img, scale)
-
     filename, extension = os.path.splitext(Filename)
     thumbnail = self.thumbnail_folder + os.path.basename (filename) + 't' + extension
-    logging.info ('Creating thumbnail ' + thumbnail)
-    pygame.image.save (img, thumbnail)
+    Resize (Filename, thumbnail, [640, 480])
 
   # Draw gallery
   def Draw (self, ImageList, Position = 0, TextList = []):
@@ -171,7 +197,7 @@ class gallery(object):
     for image in ImageList[Position:]:
       # End condition
       if count >= (self.x * self.y):
-	break
+        break
 
       # Calculate position
       pos = [int (count % self.x) * iwidth, int (count / self.x) * iheight]
@@ -180,30 +206,30 @@ class gallery(object):
       name, ext = os.path.splitext(image)
       thumbnail = self.thumbnail_folder + os.path.basename (name) + 't' + ext
       if not os.path.isfile (thumbnail):
-	# Create thumbnail
-	self.CreateThumbnail (image)
-	
+        # Create thumbnail
+        self.CreateThumbnail (image)
+
       # Load thumbnail
       if not os.access (thumbnail, os.R_OK):
-	logging.error ("Can't access " + thumbnail)
-	continue
+        logging.error ("Can't access " + thumbnail)
+        continue
 
       img = pygame.image.load (thumbnail).convert ()
-	
+
       # Scale image if required
       scale = Scale (img.get_size (), [iwidth, iheight])
       if scale:
-	#img = pygame.transform.smoothscale (img, (new_width, new_height))
-	img = pygame.transform.scale (img, scale)
-	
+        #img = pygame.transform.smoothscale (img, (new_width, new_height))
+        img = pygame.transform.scale (img, scale)
+
       # Draw
       self.surface.blit (img, pos)
       
       # Add text
       if TextList:
-	text = self.font.render (TextList[Position + count], True, YELLOW)
-	#text.get_height ()
-	self.surface.blit (text, pos)
+        text = self.font.render (TextList[Position + count], True, YELLOW)
+        #text.get_height ()
+        self.surface.blit (text, pos)
 
       # Next
       count += 1
@@ -255,32 +281,32 @@ class gallery(object):
 
       # Wait for event
       while True:
-	event = pygame.event.wait ()
-	if (event.type == pygame.QUIT) or ('click' in self.button_back.handleEvent(event)):
-	  logging.info ("Back")
-	  return -1
-	elif not event.type == pygame.MOUSEBUTTONUP:
-	  continue
-	
-	if self.button_down.pressed (event.pos):
-	  # Down
-	  NewPosition = Position + (self.x * self.y)
-	  if (NewPosition <= len (ImageList)-1):
-	    Position = NewPosition
-	    logging.info ('Down')
-	    break
-	elif self.button_up.pressed (event.pos):
-	  # Up
-	  NewPosition = Position - (self.x * self.y)
-	  if (NewPosition < 0):
-	    NewPosition = 0
-	  Position = NewPosition
-	  logging.info ('Up')
-	  break
-	  
-	# Get selection
-	selection = self.GetSelection (event.pos) + Position
-	
-	if ((selection < len (ImageList)) and (selection >= 0)):
-	  logging.info ('Selection ' + str (selection))
-	  return selection
+        event = pygame.event.wait ()
+        if (event.type == pygame.QUIT) or ('click' in self.button_back.handleEvent(event)):
+          logging.info ("Back")
+          return -1
+        elif not event.type == pygame.MOUSEBUTTONUP:
+          continue
+
+        if self.button_down.pressed (event.pos):
+          # Down
+          NewPosition = Position + (self.x * self.y)
+          if (NewPosition <= len (ImageList)-1):
+            Position = NewPosition
+            logging.info ('Down')
+            break
+        elif self.button_up.pressed (event.pos):
+          # Up
+          NewPosition = Position - (self.x * self.y)
+          if (NewPosition < 0):
+            NewPosition = 0
+          Position = NewPosition
+          logging.info ('Up')
+          break
+          
+        # Get selection
+        selection = self.GetSelection (event.pos) + Position
+
+        if ((selection < len (ImageList)) and (selection >= 0)):
+          logging.info ('Selection ' + str (selection))
+          return selection
