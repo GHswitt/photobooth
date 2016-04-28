@@ -23,12 +23,8 @@ My system setup looks like this:
 * Show URL and QRCode of image in the webserver gallery
 * Local HTTP supports showing the current image for remote screen (e.g. tablet on wall in another room)
 * WhatsApp image serving support: You send an image number to a number running yowsup and get the image to your phone 
-
-New features (some parts finished, but not yet committed):
-
-* Admin Telegram support (telepot): Control photobooth, get log, status, receive error messages, ... (WIP)
-* Underexposure warning support (for example if the flash does not work): Send warning to Admin via Telegram (WIP)
-* Green screen support (WIP)
+* Underexposure warning support
+* Admin Telegram support (telepot): Receive errors and warnings, receive underexposed images
 
 ## Screenshots
 **Main view**
