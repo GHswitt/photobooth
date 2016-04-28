@@ -165,6 +165,7 @@ class photobooth(object):
     if 'TGBotToken' in Config:
       AdminId = int(Config['TGAdminId']) if 'TGAdminId' in Config else None
       self.TGBot = pbtelepot.pbBot (Config['TGBotToken'], AdminId)
+      self.TGBot.sendMessage ('Photobooth started')
     else:
       self.TGBot = None
     
@@ -414,9 +415,8 @@ class photobooth(object):
       if uep >= self.UEThreshold:
         logging.warn ('Underexposure!')
         if self.TGBot:
-          self.TGBot.sendMessage ()
-          img = GetImageJPEG (True)
-          self.TGBot.sendPhoto (img, 'Warn: Underexposure: ' + self.status_message)
+          img = self.GetImageJPEG (True)
+          self.TGBot.sendPhoto (img, 'Warn: Underexposure: ' + self.status_message + ' ' + str (uep) + '%')
           img.close ()
 
   # Get current image as JPEG
@@ -428,6 +428,8 @@ class photobooth(object):
     # Load to Pillow
     Img = PIL.Image.frombytes ('RGB', self.current_image.get_size (), RGB)
     output = StringIO.StringIO()
+    # Set name so others can get the extension
+    setattr (output, 'name', 'a.jpg')
     # Save as JPEG
     Img.save(output, format="JPEG")
     if Stream:
