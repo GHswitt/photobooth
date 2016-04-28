@@ -157,6 +157,9 @@ class photobooth(object):
     # WhatsApp support
     self.WhatsAppNumber = Config['WhatsAppNumber'] if 'WhatsAppNumber' in Config else None
 
+    # Underexposure detection
+    self.UEThreshold = Config['UEThreshold'] if 'UEThreshold' in Config else 0
+
     # Gallery
     self.gallery = gallery.gallery (self.screen_size, 4, 3)
 
@@ -387,9 +390,14 @@ class photobooth(object):
     self.status_message = os.path.basename (File)
 
     # Check exposure
-    ts = image.copy ()
-    t = pygame.transform.threshold (ts, image, ( 0,0,0 ), [20]*3, ( 255,255,255 ), 0)
-    logging.info ('threshold: ' + str (t))
+    if self.UEThreshold:
+      ts = image.copy ()
+      t = pygame.transform.threshold (ts, image, ( 0,0,0 ), [40]*3, ( 255,255,255 ), 0)
+      size = image.get_size ()
+      uep = t*100 / (size[0] * size[1])
+      logging.info (os.path.basename (File) + ': UE value ' + str (uep) + '%')
+      if uep >= self.UEThreshold:
+        logging.warn ('Underexposure!')
 
   # Get current image as JPEG
   def GetImageJPEG(self):
