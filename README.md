@@ -30,6 +30,12 @@ New features (some parts finished, but not yet committed):
 * Underexposure warning support (for example if the flash does not work): Send warning to Admin via Telegram (WIP)
 * Green screen support (WIP)
 
+## Screenshots
+**Main view**
+![alt text](docs/PB_20160427.jpg "Main view")
+**Gallery view**
+![alt text](docs/PB_Galerie_20160427.jpg "Gallery view")
+
 ## Requirements
 * pygame
 * pillow
