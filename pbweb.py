@@ -32,7 +32,7 @@ class pbHTTPHandler (SimpleHTTPServer.SimpleHTTPRequestHandler):
     
     if s.path == '/log':
       s.send_header ("Content-type", "text/plain")
-    elif s.path == '/current.jpg':
+    elif s.path.split ('?', 1)[0] == '/current.jpg':
       s.send_header ("Content-type", "image/jpeg")
       s.send_header ("refresh", "10")
     else:
@@ -56,7 +56,7 @@ class pbHTTPHandler (SimpleHTTPServer.SimpleHTTPRequestHandler):
           f.seek (0, 0)
         s.wfile.write (f.read (limit))
         f.close ()
-      elif s.path == '/current.jpg':
+      elif s.path.split ('?', 1)[0] == '/current.jpg':
         # Current image
         s.wfile.write (s.server.GetImage ())
       else:
@@ -81,7 +81,6 @@ class pbWeb (threading.Thread):
   
   def run (self):
     # TCPServer with HTTP handler
-    #httpd = SocketServer.TCPServer (("", 8080), pbHTTPHandler)
     httpd = pbServer (("", 8080), pbHTTPHandler, self.GetImage)
 
     # Run until stopped

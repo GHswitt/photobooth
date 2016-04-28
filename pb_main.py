@@ -7,14 +7,29 @@ Licence: GNU AGPL
 '''
 
 import pb
+import sys
 
-pb = pb.photobooth (Name = 'Test',
-    FlashAirAddress = '192.168.2.100',
-    UploadHost = 'webhost.de',
-    UploadUser = 'pb',
-    UploadPath = '/var/www/homepage/public/pb',
-    QRPath = 'http://webhost.de/pb/#!/test',
-    #WhatsAppNumber = '0123 456789')
-    WhatsAppNumber = None)
+def LoadConfig(ConfigFile):
+  try:
+    f = open(ConfigFile, 'r')
+    Config = {}
+    for line in f:
+      line = line.strip()
+      # Ignore comments
+      if len(line) and line[0] in ('#',';'):
+        continue
+      # Ignore trailing comments
+      line = line.split(';', 1)[0].split('=', 1)
+      # Get name and value
+      Name = line[0].strip()
+      Value = line[1].strip()
+      Config[Name] = Value
+    return Config
+  except IOError:
+    print("Config not found: %s" % ConfigFile)
+    sys.exit(1)
+
+
+pb = pb.photobooth (LoadConfig ('config'))
 
 pb.MainLoop ()

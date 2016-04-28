@@ -38,5 +38,9 @@
       toggleFullScreen();
     //}
   }, false);
+  
+  setInterval(function() {
+    imgElement.src = 'current.jpg?rand=' + Math.random();
+  }, 10000);
 </script>
 </html>

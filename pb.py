@@ -87,16 +87,7 @@ class photobooth(object):
   gallery = None
 
   # Constructor
-  def __init__(self,
-	       FlashAirAddress,
-	       Name = None,
-	       PrinterName = None, 
-	       UploadHost = None,
-	       UploadUser = None,
-	       UploadPath = None,
-	       UploadSize = [1600, 1600],
-	       QRPath = None,
-	       WhatsAppNumber = None):
+  def __init__(self, Config):
     logging.basicConfig (filename='pb.log', level=logging.DEBUG, format='%(asctime)s %(levelname)-7s %(module)-8s/%(funcName)-8s: %(message)s')
     #root = logging.getLogger ()
     #root.setLevel (logging.DEBUG)
@@ -124,12 +115,13 @@ class photobooth(object):
     self.button_gallery = pygbutton.PygButton (self.button_gallery_rect, 'Galerie', bgcolor=GREEN)
     
     # Project name
-    self.name = Name
+    self.name = Config['Name'] if 'Name' in Config else 'Test'
+    logging.info ('Name: ' + self.name)
 
     # Setup FlashAir card
-    self.fa = card.connection (FlashAirAddress, 80, 10)
-    self.fa_address = FlashAirAddress
-    logging.info ('FlashAir address: ' + FlashAirAddress)
+    self.fa_address = Config['FlashAirAddress'] if 'FlashAirAddress' in Config else '1.2.3.4'
+    self.fa = card.connection (self.fa_address, 80, 10)
+    logging.info ('FlashAir address: ' + self.fa_address)
     self.connected = False
 
     # Last file
@@ -145,24 +137,25 @@ class photobooth(object):
       logging.error ('No access to image folder: ' + self.image_folder)
 
     # Printer
-    if PrinterName:
-      logging.info ('Printer: ' + PrinterName)
-      self.printer = printer.printer (PrinterName)
+    if 'PrinterName' in Config:
+      logging.info ('Printer: ' + Config['PrinterName'])
+      self.printer = printer.printer (Config['PrinterName'])
 
       # Print history
       self.phistory = printer.print_history (os.path.join (self.image_folder, 'print_history.txt'))
 
     # Upload
-    if UploadHost:
-      self.upload = pbupload.pfweb (self.name, UploadHost, UploadUser, UploadPath, UploadSize)
+    if 'UploadHost' in Config:
+      UploadSize = [int(Config['UploadSize'])]*2
+      self.upload = pbupload.pfweb (self.name, Config['UploadHost'], Config['UploadUser'], Config['UploadPath'], UploadSize)
     else:
       self.upload = None
     
     # QRCode path
-    self.QRPath = QRPath
+    self.QRPath = Config['QRPath'] if 'QRPath' in Config else None
 
     # WhatsApp support
-    self.WhatsAppNumber = WhatsAppNumber
+    self.WhatsAppNumber = Config['WhatsAppNumber'] if 'WhatsAppNumber' in Config else None
 
     # Gallery
     self.gallery = gallery.gallery (self.screen_size, 4, 3)

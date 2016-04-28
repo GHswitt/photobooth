@@ -1,0 +1,8 @@
+Name = Test
+FlashAirAddress = 192.168.2.100
+UploadHost = yourhost.net
+UploadUser = webuser
+UploadPath = /var/www/yourhost.net/public/pb
+UploadSize = 1600
+QRPath = http://yourhost.net/pb/#!/test
+;WhatsAppNumber = 45123 456789
