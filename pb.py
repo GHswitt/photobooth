@@ -178,7 +178,9 @@ class photobooth(object):
 
   # Get image file list
   def GetFileList (self):
-    return glob.glob (os.path.join (self.image_folder, '*.JPG'))
+    ret = glob.glob (os.path.join (self.image_folder, '*.JPG'))
+    ret += glob.glob (os.path.join (self.image_folder, '*.jpg'))
+    return ret
 
   # Find newest directory
   def UpdateRemoteDirectory (self):
