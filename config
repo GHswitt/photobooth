@@ -6,3 +6,5 @@ UploadPath = /var/www/yourhost.net/public/pb
 UploadSize = 1600
 QRPath = http://yourhost.net/pb/#!/test
 ;WhatsAppNumber = 45123 456789
+UEThreshold = 30
+
