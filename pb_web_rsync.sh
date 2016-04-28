@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 WEBSERVER=$1
 WEBUSER=$2

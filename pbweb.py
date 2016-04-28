@@ -32,19 +32,21 @@ class pbHTTPHandler (SimpleHTTPServer.SimpleHTTPRequestHandler):
     
     if s.path == '/log':
       s.send_header ("Content-type", "text/plain")
-    else:
+    elif s.path == '/current.jpg':
       s.send_header ("Content-type", "image/jpeg")
+      s.send_header ("refresh", "10")
+    else:
+      s.send_header ("Content-type", "text/html")
 
-    s.send_header ("refresh", "10")
     s.end_headers ()
 
   # Handle GET
   def do_GET(s):
     s.do_HEAD()
-    if s.path == '/log':
-      # Logfile
-      limit = 5000
-      try:
+    try:
+      if s.path == '/log':
+        # Logfile
+        limit = 5000
         f = open ('pb.log', 'r')
         f.seek (0, 2)
         size = f.tell ()
@@ -54,16 +56,16 @@ class pbHTTPHandler (SimpleHTTPServer.SimpleHTTPRequestHandler):
           f.seek (0, 0)
         s.wfile.write (f.read (limit))
         f.close ()
-      except:
-        return
-    else:
-      # Screenshot
-      try:
+      elif s.path == '/current.jpg':
+        # Current image
         s.wfile.write (s.server.GetImage ())
-      except:
-        return
-      
-    
+      else:
+        f = open ('index.html', 'r')
+        s.wfile.write (f.read ())
+        f.close ()
+    except:
+      return
+
 class pbWeb (threading.Thread):
   def __init__ (self, GetImageFunction):
     super (pbWeb, self).__init__()
