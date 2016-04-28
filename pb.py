@@ -28,6 +28,7 @@ import pbqrcode
 #import pktrigger
 import StringIO
 import PIL.Image
+import pbtelepot
 
 # Define some colors
 BLACK = (0, 0, 0)
@@ -160,6 +161,13 @@ class photobooth(object):
     # Underexposure detection
     self.UEThreshold = int(Config['UEThreshold']) if 'UEThreshold' in Config else 0
 
+    # Telegram bot
+    if 'TGBotToken' in Config:
+      AdminId = int(Config['TGAdminId']) if 'TGAdminId' in Config else None
+      self.TGBot = pbtelepot.pbBot (Config['TGBotToken'], AdminId)
+    else:
+      self.TGBot = None
+    
     # Gallery
     self.gallery = gallery.gallery (self.screen_size, 4, 3)
 
@@ -207,6 +215,8 @@ class photobooth(object):
 	
     if not latest_dir:
       logging.warning ('FlashAir: Did not find latest directory')
+      if self.TGBot:
+        self.TGBot.sendMessage ('Warn: FlashAir: Did not find latest directory')
       return
     
     self.fa_path = latest_dir.directory_name + '/' + latest_dir.file_name
@@ -234,10 +244,11 @@ class photobooth(object):
     if Status:
       # Reset write event
       self.fa_LastWriteEvent = 0
-      #logging.warning ('FlashAir: Get write timestamp failed')
       self.status_message = 'Keine Verbindung'
-      #self.WriteMessage ("Keine Verbindung")
-      #self.state = state.pb_error
+      if self.connected:
+        logging.warning ('FlashAir: Get write timestamp failed')
+        if self.TGBot:
+          self.TGBot.sendMessage ('Warn: FlashAir disconnected!')
       self.connected = False
       return False
 
@@ -245,6 +256,8 @@ class photobooth(object):
       logging.info ('FlashAir: Connected')
       self.status_message = 'Verbunden'
       self.connected = True
+      if self.TGBot:
+        self.TGBot.sendMessage ('Info: FlashAir connected')
 
     Event = int (Event)
 
@@ -400,9 +413,14 @@ class photobooth(object):
       logging.info (os.path.basename (File) + ': UE value ' + str (uep) + '%')
       if uep >= self.UEThreshold:
         logging.warn ('Underexposure!')
+        if self.TGBot:
+          self.TGBot.sendMessage ()
+          img = GetImageJPEG (True)
+          self.TGBot.sendPhoto (img, 'Warn: Underexposure: ' + self.status_message)
+          img.close ()
 
   # Get current image as JPEG
-  def GetImageJPEG(self):
+  def GetImageJPEG(self, Stream = False):
     if not self.current_image:
       return None
     # Get current image as RGB
@@ -412,8 +430,12 @@ class photobooth(object):
     output = StringIO.StringIO()
     # Save as JPEG
     Img.save(output, format="JPEG")
-    data = output.getvalue()
-    output.close()
+    if Stream:
+      output.seek(0)
+      return output
+    else:
+      data = output.getvalue()
+      output.close()
     return data
     
   # Gallery
