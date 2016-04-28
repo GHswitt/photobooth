@@ -20,6 +20,8 @@ def LoadConfig(ConfigFile):
         continue
       # Ignore trailing comments
       line = line.split(';', 1)[0].split('=', 1)
+      if line[0] == '':
+        continue
       # Get name and value
       Name = line[0].strip()
       Value = line[1].strip()

@@ -158,7 +158,7 @@ class photobooth(object):
     self.WhatsAppNumber = Config['WhatsAppNumber'] if 'WhatsAppNumber' in Config else None
 
     # Underexposure detection
-    self.UEThreshold = Config['UEThreshold'] if 'UEThreshold' in Config else 0
+    self.UEThreshold = int(Config['UEThreshold']) if 'UEThreshold' in Config else 0
 
     # Gallery
     self.gallery = gallery.gallery (self.screen_size, 4, 3)
