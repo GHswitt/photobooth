@@ -46,4 +46,42 @@ My system setup looks like this:
 ''TODO''
 
 ## Configuration
-''TODO''
+The configuration is done in the file *config*:
+```
+Name = Test
+FlashAirAddress = 192.168.2.100
+UploadHost = yourhost.net
+UploadUser = webuser
+UploadPath = /var/www/yourhost.net/public/pb
+UploadSize = 1600
+QRPath = http://yourhost.net/pb/#!/test
+;WhatsAppNumber = 45123 456789
+UEThreshold = 40
+TGBotToken = abcdefgh
+TGAdminId = 12345678
+```
+
+Unused values/features should be commented out with **;**
+
+### *Name*
+Required. Name of the current project. The images are saved in *images/<Name>*. Also the web gallery folder uses this name.
+### *FlashAirAddress*
+Required. Address of the FlashAir card.
+### *UploadHost*
+Optional. Host were the image gallery should be uploaded to with rsync via ssh.
+### *UploadUser*
+Optional. SSH user. Has to be setup for key login (password login not supported)
+### *UploadPath*
+Optional. Path for image gallery
+### *UploadSize*
+Optional. Maximum pixel size of each side of the picture (1600 => maximum 1600x1600)
+### *QRPath*
+Optional. URL for QRCode generation, should point to image gallery
+### *WhatsAppNumber*
+Optional. Number of pbwa serving images. Only used for displaying text, pbwa is configured elsewhere.
+### *UEThreshold*
+Optional. Underexposure detection threshold in %. 40% means 40% of the image pixels are below a threshold.
+### *TGBotToken*
+Optional. Telegram bot token, used for admin Telegram bot interface
+### *TGAdminId*
+Optional. Telegram ID of admin user. If omitted, the user which sends *IamAdmin* to the bot, receives the status messages and underexposed images.
