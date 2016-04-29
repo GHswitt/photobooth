@@ -9,6 +9,7 @@ Licence: GNU AGPL
 import paramiko
 import os
 import sys
+import glob
 import threading
 import logging
 import Queue
@@ -144,6 +145,24 @@ class pfweb(object):
       self.UploadT.join ()
       self.UploadE = None
 
+  # Update local gallery
+  def UpdateGallery (self):
+    # Update gallery
+    ret = subprocess.call (['/home/panel/PhotoFloat/scanner/main.py', 
+                          os.path.join (self.LocalPath, 'albums'),
+                          os.path.join (self.LocalPath, 'cache')])
+    
+    if ret:
+      logging.error ("Calling PhotoFloat scanner failed: " + str(ret))
+      return False
+    
+    return True
+    
+  # Add to gallery
+  def AddToGallery (self, File):
+    # Resize to web folder
+    gallery.ResizeEXIF (File, os.path.join (self.LocalPath, "albums", self.Name, os.path.basename (File)), self.WebSize)
+  
   # Upload thread
   def UploadThread (self):
     logging.info ('Upload thread started')
@@ -156,15 +175,10 @@ class pfweb(object):
         continue
 
       # Resize to web folder
-      gallery.ResizeEXIF (item, os.path.join (self.LocalPath, "albums", self.Name, os.path.basename (item)))
+      self.AddToGallery (item)
       
       # Update gallery
-      ret = subprocess.call (['/home/panel/PhotoFloat/scanner/main.py', 
-                            os.path.join (self.LocalPath, 'albums'),
-                            os.path.join (self.LocalPath, 'cache')])
-      
-      if ret:
-        logging.error ("Calling PhotoFloat scanner failed: " + ret)
+      if not self.UpdateGallery ():
         # Upload failed, queue again
         self.UploadQ.task_done ()
         self.UploadQ.put (item)
@@ -174,7 +188,7 @@ class pfweb(object):
       ret = subprocess.call (['./pb_web_rsync.sh', self.Host, self.User, self.WebPath])
       
       if ret:
-        logging.error ("RSync failed: " + ret)
+        logging.error ("RSync failed: " + str(ret))
         # Upload failed, queue again
         self.UploadQ.task_done ()
         self.UploadQ.put (item)
@@ -189,3 +203,18 @@ class pfweb(object):
   def put (self, Local):
     # Add to queue
     self.UploadQ.put (Local)
+
+  # Add all images from folder, if not already in album
+  def addFolder (self, Folder):
+    newfiles = glob.glob (os.path.join (Folder, '*.JPG'))
+    newfiles += glob.glob (os.path.join (Folder, '*.jpg'))
+    oldfiles = glob.glob (os.path.join (self.LocalPath, "albums", self.Name, '*.JPG'))
+    oldfiles += glob.glob (os.path.join (self.LocalPath, "albums", self.Name, '*.JPG'))
+    newset = set([os.path.basename(x) for x in newfiles])
+    oldset = set([os.path.basename(x) for x in oldfiles])
+    missing = [os.path.join (Folder, x) for x in (newset - oldset)]
+    for x in missing:
+      logging.info ('Added missing: ' + x)
+      self.AddToGallery (x)
+
+    self.UpdateGallery ()

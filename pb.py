@@ -89,7 +89,7 @@ class photobooth(object):
 
   # Constructor
   def __init__(self, Config):
-    logging.basicConfig (filename='pb.log', level=logging.DEBUG, format='%(asctime)s %(levelname)-7s %(module)-8s/%(funcName)-8s: %(message)s')
+    logging.basicConfig (filename='pb.log', level=logging.INFO, format='%(asctime)s %(levelname)-7s %(module)-8s/%(funcName)-8s: %(message)s')
     #root = logging.getLogger ()
     #root.setLevel (logging.DEBUG)
     #fh = logging.FileHandler ('pb.log')
@@ -149,6 +149,8 @@ class photobooth(object):
     if 'UploadHost' in Config:
       UploadSize = [int(Config['UploadSize'])]*2
       self.upload = pbupload.pfweb (self.name, Config['UploadHost'], Config['UploadUser'], Config['UploadPath'], UploadSize)
+      # Add missing files
+      self.upload.addFolder (self.image_folder)
     else:
       self.upload = None
     
