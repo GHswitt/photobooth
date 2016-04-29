@@ -64,7 +64,7 @@ TGAdminId = 12345678
 Unused values/features should be commented out with **;**
 
 ### *Name*
-Required. Name of the current project. The images are saved in *images/<Name>*. Also the web gallery folder uses this name.
+Required. Name of the current project. The images are saved in *images/***Name**. Also the web gallery folder uses this name.
 ### *FlashAirAddress*
 Required. Address of the FlashAir card.
 ### *UploadHost*
